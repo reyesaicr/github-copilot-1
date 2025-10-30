@@ -16,8 +16,9 @@ app = FastAPI(title="Mergington High School API",
 
 # Mount the static files directory
 current_dir = Path(__file__).parent
-app.mount("/static", StaticFiles(directory=os.path.join(Path(__file__).parent,
-          "static")), name="static")
+# Ensure we pass a proper filesystem path (string) to StaticFiles
+static_dir = current_dir / "static"
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # In-memory activity database
 activities = {

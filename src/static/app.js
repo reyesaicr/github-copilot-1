@@ -10,22 +10,80 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch("/activities");
       const activities = await response.json();
 
-      // Clear loading message
+      // Clear loading message and reset select (keep placeholder)
       activitiesList.innerHTML = "";
+      activitySelect.innerHTML = '<option value="">-- Select an activity --</option>';
+
+      // Normalize activities to entries: [name, details]
+      let entries = [];
+      if (Array.isArray(activities)) {
+        // support array of activity objects: each item should contain a name/title/id
+        entries = activities.map((a) => {
+          const name = a.name || a.id || a.title || "Unnamed Activity";
+          return [name, a];
+        });
+      } else if (activities && typeof activities === "object") {
+        entries = Object.entries(activities);
+      } else {
+        throw new Error("Unexpected activities format");
+      }
 
       // Populate activities list
-      Object.entries(activities).forEach(([name, details]) => {
+      entries.forEach(([name, details]) => {
+        // Ensure participants is always an array
+        details.participants = Array.isArray(details.participants) ? details.participants : [];
+
+        // Build card using DOM methods (avoid innerHTML overwrite issues)
         const activityCard = document.createElement("div");
         activityCard.className = "activity-card";
 
-        const spotsLeft = details.max_participants - details.participants.length;
+        const title = document.createElement("h4");
+        title.textContent = name;
+        activityCard.appendChild(title);
 
-        activityCard.innerHTML = `
-          <h4>${name}</h4>
-          <p>${details.description}</p>
-          <p><strong>Schedule:</strong> ${details.schedule}</p>
-          <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
-        `;
+        const desc = document.createElement("p");
+        desc.textContent = details.description || "";
+        activityCard.appendChild(desc);
+
+        const schedule = document.createElement("p");
+        schedule.innerHTML = `<strong>Schedule:</strong> ${details.schedule || "TBA"}`;
+        activityCard.appendChild(schedule);
+
+        const spotsLeft = (details.max_participants || 0) - details.participants.length;
+        const availability = document.createElement("p");
+        availability.innerHTML = `<strong>Availability:</strong> ${spotsLeft} spots left`;
+        activityCard.appendChild(availability);
+
+        // Participants section
+        const participantsDiv = document.createElement("div");
+        participantsDiv.className = "participants-section";
+
+        const heading = document.createElement("h5");
+        heading.textContent = "Participants ";
+        const countSpan = document.createElement("span");
+        countSpan.className = "participant-count";
+        countSpan.textContent = `(${details.participants.length})`;
+        heading.appendChild(countSpan);
+        participantsDiv.appendChild(heading);
+
+        const ul = document.createElement("ul");
+        ul.className = "participants-list";
+
+        if (details.participants.length === 0) {
+          const li = document.createElement("li");
+          li.className = "no-participants";
+          li.textContent = "No participants yet";
+          ul.appendChild(li);
+        } else {
+          details.participants.forEach((p) => {
+            const li = document.createElement("li");
+            li.textContent = p;
+            ul.appendChild(li);
+          });
+        }
+
+        participantsDiv.appendChild(ul);
+        activityCard.appendChild(participantsDiv);
 
         activitiesList.appendChild(activityCard);
 
@@ -60,11 +118,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (response.ok) {
         messageDiv.textContent = result.message;
-        messageDiv.className = "success";
+        messageDiv.className = "message success";
         signupForm.reset();
+
+        // Refresh activities so new participant appears immediately
+        await fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
-        messageDiv.className = "error";
+        messageDiv.className = "message error";
       }
 
       messageDiv.classList.remove("hidden");
@@ -75,7 +136,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }, 5000);
     } catch (error) {
       messageDiv.textContent = "Failed to sign up. Please try again.";
-      messageDiv.className = "error";
+      messageDiv.className = "message error";
       messageDiv.classList.remove("hidden");
       console.error("Error signing up:", error);
     }
