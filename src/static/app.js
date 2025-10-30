@@ -7,7 +7,11 @@ document.addEventListener("DOMContentLoaded", () => {
   // Function to fetch activities from API
   async function fetchActivities() {
     try {
-      const response = await fetch("/activities");
+      // Avoid cached responses so updates (signup/unregister) appear immediately in the UI
+      const response = await fetch("/activities", {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
       const activities = await response.json();
 
       // Clear loading message and reset select (keep placeholder)
@@ -77,7 +81,58 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
           details.participants.forEach((p) => {
             const li = document.createElement("li");
-            li.textContent = p;
+
+            // participant email text
+            const emailSpan = document.createElement("span");
+            emailSpan.className = "participant-email";
+            emailSpan.textContent = p;
+
+            // delete/unregister button (simple X icon)
+            const deleteBtn = document.createElement("button");
+            deleteBtn.className = "delete-btn";
+            deleteBtn.setAttribute("aria-label", `Unregister ${p} from ${name}`);
+            deleteBtn.title = `Unregister ${p}`;
+            deleteBtn.textContent = "✖";
+
+            // When clicked, call backend to remove participant, then refresh list
+            deleteBtn.addEventListener("click", async () => {
+              // optional: simple confirm step
+              const doIt = confirm(`Unregister ${p} from ${name}?`);
+              if (!doIt) return;
+
+              try {
+                const resp = await fetch(
+                  `/activities/${encodeURIComponent(name)}/participants?email=${encodeURIComponent(p)}`,
+                  { method: "DELETE" }
+                );
+
+                const data = await resp.json();
+                if (resp.ok) {
+                  messageDiv.textContent = data.message || `Unregistered ${p}`;
+                  messageDiv.className = "message success";
+                  messageDiv.classList.remove("hidden");
+
+                  // Refresh activities so UI updates
+                  await fetchActivities();
+                } else {
+                  messageDiv.textContent = data.detail || "Failed to unregister";
+                  messageDiv.className = "message error";
+                  messageDiv.classList.remove("hidden");
+                }
+
+                setTimeout(() => {
+                  messageDiv.classList.add("hidden");
+                }, 4000);
+              } catch (err) {
+                console.error("Error unregistering:", err);
+                messageDiv.textContent = "Failed to unregister. Please try again.";
+                messageDiv.className = "message error";
+                messageDiv.classList.remove("hidden");
+              }
+            });
+
+            li.appendChild(emailSpan);
+            li.appendChild(deleteBtn);
             ul.appendChild(li);
           });
         }
